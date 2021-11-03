@@ -52,6 +52,8 @@ episode=args.episode
 ref_pose_arr=args.ref.split(",")
 ref_pose=[]
 
+#yorum eklendi
+
 
 
 for pose in ref_pose_arr:
