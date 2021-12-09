@@ -4,6 +4,7 @@ import numpy as np
 from airsimdroneracingvae.types import Pose, Vector3r, Quaternionr
 import airsimdroneracingvae
 
+
 def interp_vector(a, b, n):
     delta = (b-a)/(n-1)
     list_vecs = []
@@ -11,6 +12,7 @@ def interp_vector(a, b, n):
         new_vec = a+delta*i
         list_vecs.append(new_vec)
     return np.asarray(list_vecs)
+
 
 def randomQuadPose(x_range, y_range, z_range, yaw_range, pitch_range, roll_range):
     x = randomSample(x_range)
@@ -25,6 +27,7 @@ def randomQuadPose(x_range, y_range, z_range, yaw_range, pitch_range, roll_range
     q_o_b = Quaternionr(q[0], q[1], q[2], q[3])
     return Pose(t_o_b, q_o_b), yaw
 
+
 def QuadPose(quad_pose):
     x, y, z, roll, pitch, yaw = quad_pose
     q = Rotation.from_euler('ZYX', [yaw, pitch, roll])  # capital letters denote intrinsic rotation (lower case would be extrinsic)
@@ -34,8 +37,10 @@ def QuadPose(quad_pose):
     q_o_b = Quaternionr(q[0], q[1], q[2], q[3])
     return Pose(t_o_b, q_o_b)
 
+
 def randomSample(value_range):
     return (value_range[1] - value_range[0])*np.random.random() + value_range[0]
+
 
 def randomGatePose(p_o_b, phi_base, r_range, cam_fov, correction):
     gate_ok = False
@@ -75,6 +80,7 @@ def randomGatePose(p_o_b, phi_base, r_range, cam_fov, correction):
 
         return p_o_g, r, theta, psi, phi_rel
 
+
 def debugRelativeOrientation(p_o_b, p_o_g, phi_rel):
     phi_quad_ref = get_yaw_base(p_o_b)
     phi_gate = phi_quad_ref + phi_rel
@@ -82,6 +88,7 @@ def debugRelativeOrientation(p_o_b, p_o_g, phi_rel):
     q = rot_gate.as_quat()
     p_o_g = Pose(p_o_g.position, Quaternionr(q[0], q[1], q[2], q[3]))
     return p_o_g
+
 
 def debugGatePoses(p_o_b, r, theta, psi):
     # get relative vector in the base frame coordinates
@@ -100,6 +107,13 @@ def debugGatePoses(p_o_b, r, theta, psi):
     p_o_g = Pose(t_o_g, Quaternionr(q[0], q[1], q[2], q[3]))
     return p_o_g
 
+
+def twoDPolarTranslation(r, theta, z):
+    x = r * round(np.cos(np.radians(theta)),2)
+    y = r * round(np.sin(np.radians(theta)),2)
+    return Vector3r(x, y, z)
+
+
 def polarTranslation(r, theta, psi):
     # follow math convention for polar coordinates
     # r: radius
@@ -110,6 +124,7 @@ def polarTranslation(r, theta, psi):
     z = r * np.cos(psi)
     return Vector3r(x, y, z)
 
+
 def convert_t_body_2_world(t_body, q_o_b):
     rotation = Rotation.from_quat([q_o_b.x_val, q_o_b.y_val, q_o_b.z_val, q_o_b.w_val])
     t_body_np = [t_body.x_val, t_body.y_val, t_body.z_val]
@@ -117,11 +132,13 @@ def convert_t_body_2_world(t_body, q_o_b):
     t_world = Vector3r(t_world_np[0], t_world_np[1], t_world_np[2])
     return t_world
 
+
 def get_yaw_base(p_o_b):
     q_o_b = p_o_b.orientation
     rotation = Rotation.from_quat([q_o_b.x_val, q_o_b.y_val, q_o_b.z_val, q_o_b.w_val])
     euler_angles = rotation.as_euler('ZYX')
     return euler_angles[0]
+
 
 # this is utility function to get a velocity constraint which can be passed to moveOnSplineVelConstraints() 
 # the "scale" parameter scales the gate facing vector accordingly, thereby dictating the speed of the velocity constraint
@@ -147,6 +164,7 @@ def get_gate_facing_vector_from_quaternion(airsim_quat, direction, scale=1.0,):
     else:
         return airsimdroneracingvae.Vector3r(-scale * gate_facing_vector[0], -scale * gate_facing_vector[1], scale * gate_facing_vector[2])
 
+
 def getGatePoseWorld(p_o_b, r, theta, psi, phi_rel):
     # get relative vector in the base frame coordinates
     t_b_g_body = polarTranslation(r, theta, psi)
@@ -161,6 +179,7 @@ def getGatePoseWorld(p_o_b, r, theta, psi, phi_rel):
     q = rot_gate.as_quat()
     p_o_g = Pose(t_o_g, Quaternionr(q[0], q[1], q[2], q[3]))
     return p_o_g
+
 
 def dist3dp(p1, p2):
     xDiff = np.power(p1[0] - p2[0], 2) 

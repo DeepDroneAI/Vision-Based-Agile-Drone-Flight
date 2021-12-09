@@ -17,7 +17,7 @@ from traj_planner import Traj_Planner
 from traj_planner_min_jerk import Traj
 # changed 
 from pose_sampler import * 
-
+from createTraj import *
 
 
 class PoseSampler:
@@ -40,31 +40,36 @@ class PoseSampler:
         self.state=np.zeros(12)
         self.traj2=Traj()
 
-        quat0 = R.from_euler('ZYX',[90.,0.,0.],degrees=True).as_quat()
-        quat1 = R.from_euler('ZYX',[60.,0.,0.],degrees=True).as_quat()
-        quat2 = R.from_euler('ZYX',[30.,0.,0.],degrees=True).as_quat()
-        quat3 = R.from_euler('ZYX',[0.,0.,0.],degrees=True).as_quat()
-        quat4 = R.from_euler('ZYX',[-30.,0.,0.],degrees=True).as_quat() 
-        quat5 = R.from_euler('ZYX',[-60.,0.,0.],degrees=True).as_quat() 
-        quat6 = R.from_euler('ZYX',[-90.,0.,0.],degrees=True).as_quat()
-        quat7 = R.from_euler('ZYX',[-120.,0.,0.],degrees=True).as_quat()
-        quat8 = R.from_euler('ZYX',[-150.,0.,0.],degrees=True).as_quat()
-        quat9 = R.from_euler('ZYX',[-180.,0.,0.],degrees=True).as_quat()
-        quat10 = R.from_euler('ZYX',[-210.,0.,0.],degrees=True).as_quat()
-        quat11 = R.from_euler('ZYX',[-250.,0.,0.],degrees=True).as_quat()
-        self.yaw_track=np.array([90,60,30,0,-30,-60,-90,-120,-150,-180,-210,-250])*np.pi/180
-        self.track = [Pose(Vector3r(0.,10.,-2.) , Quaternionr(quat0[0],quat0[1],quat0[2],quat0[3])),
-                    Pose(Vector3r(5.,8.66,-2) , Quaternionr(quat1[0],quat1[1],quat1[2],quat1[3])),
-                    Pose(Vector3r(8.66,5.,-2) , Quaternionr(quat2[0],quat2[1],quat2[2],quat2[3])),
-                    Pose(Vector3r(10.,0.,-2) , Quaternionr(quat3[0],quat3[1],quat3[2],quat3[3])),
-                    Pose(Vector3r(8.66,-5.,-2) , Quaternionr(quat4[0],quat4[1],quat4[2],quat4[3])),
-                    Pose(Vector3r(5.,-8.66,-2) , Quaternionr(quat5[0],quat5[1],quat5[2],quat5[3])), 
-                    Pose(Vector3r(0.,-10.,-2) , Quaternionr(quat6[0],quat6[1],quat6[2],quat6[3])),
-                    Pose(Vector3r(-5.,-8.66,-2) , Quaternionr(quat7[0],quat7[1],quat7[2],quat7[3])),
-                    Pose(Vector3r(-8.66,-5,-2) , Quaternionr(quat8[0],quat8[1],quat8[2],quat8[3])),
-                    Pose(Vector3r(-10.,0,-2) , Quaternionr(quat9[0],quat9[1],quat9[2],quat9[3])),
-                    Pose(Vector3r(-8.66,5.,-2) , Quaternionr(quat10[0],quat10[1],quat10[2],quat10[3])),
-                    Pose(Vector3r(-5.,8.66,-2) , Quaternionr(quat11[0],quat11[1],quat11[2],quat11[3]))]
+        traj = Trajectory(24, 20)
+        traj.buildSimpleTrajectory()
+        self.yaw_track = traj.yawTrack
+        self.track = traj.track
+
+        #quat0 = R.from_euler('ZYX',[90.,0.,0.],degrees=True).as_quat()
+        #quat1 = R.from_euler('ZYX',[60.,0.,0.],degrees=True).as_quat()
+        #quat2 = R.from_euler('ZYX',[30.,0.,0.],degrees=True).as_quat()
+        #quat3 = R.from_euler('ZYX',[0.,0.,0.],degrees=True).as_quat()
+        #quat4 = R.from_euler('ZYX',[-30.,0.,0.],degrees=True).as_quat()
+        #quat5 = R.from_euler('ZYX',[-60.,0.,0.],degrees=True).as_quat()
+        #quat6 = R.from_euler('ZYX',[-90.,0.,0.],degrees=True).as_quat()
+        #quat7 = R.from_euler('ZYX',[-120.,0.,0.],degrees=True).as_quat()
+        #quat8 = R.from_euler('ZYX',[-150.,0.,0.],degrees=True).as_quat()
+        #quat9 = R.from_euler('ZYX',[-180.,0.,0.],degrees=True).as_quat()
+        #quat10 = R.from_euler('ZYX',[-210.,0.,0.],degrees=True).as_quat()
+        #quat11 = R.from_euler('ZYX',[-250.,0.,0.],degrees=True).as_quat()
+        #self.yaw_track=np.array([90,60,30,0,-30,-60,-90,-120,-150,-180,-210,-250])*np.pi/180
+        #self.track = [Pose(Vector3r(0.,10.,-2.) , Quaternionr(quat0[0],quat0[1],quat0[2],quat0[3])),
+        #              Pose(Vector3r(5.,8.66,-2) , Quaternionr(quat1[0],quat1[1],quat1[2],quat1[3])),
+        #              Pose(Vector3r(8.66,5.,-2) , Quaternionr(quat2[0],quat2[1],quat2[2],quat2[3])),
+        #              Pose(Vector3r(10.,0.,-2) , Quaternionr(quat3[0],quat3[1],quat3[2],quat3[3])),
+        #              Pose(Vector3r(8.66,-5.,-2) , Quaternionr(quat4[0],quat4[1],quat4[2],quat4[3])),
+        #              Pose(Vector3r(5.,-8.66,-2) , Quaternionr(quat5[0],quat5[1],quat5[2],quat5[3])),
+        #              Pose(Vector3r(0.,-10.,-2) , Quaternionr(quat6[0],quat6[1],quat6[2],quat6[3])),
+        #              Pose(Vector3r(-5.,-8.66,-2) , Quaternionr(quat7[0],quat7[1],quat7[2],quat7[3])),
+        #              Pose(Vector3r(-8.66,-5,-2) , Quaternionr(quat8[0],quat8[1],quat8[2],quat8[3])),
+        #              Pose(Vector3r(-10.,0,-2) , Quaternionr(quat9[0],quat9[1],quat9[2],quat9[3])),
+        #              Pose(Vector3r(-8.66,5.,-2) , Quaternionr(quat10[0],quat10[1],quat10[2],quat10[3])),
+        #              Pose(Vector3r(-5.,8.66,-2) , Quaternionr(quat11[0],quat11[1],quat11[2],quat11[3]))]
             
         quat_drone = R.from_euler('ZYX',[0.,0.,0.],degrees=True).as_quat()
         self.drone_init = Pose(Vector3r(-5.,10.,-2), Quaternionr(quat_drone[0],quat_drone[1],quat_drone[2],quat_drone[3]))
@@ -328,7 +333,13 @@ class PoseSampler:
                 self.traj.find_traj(x_initial=x_initial,x_final=x_final,v_initial=vel_initial,v_final=vel_final,T=T)
                 #self.traj.find_traj(x_initial=x_initial,x_final=x_final,v_initial=vel_initial,v_final=vel_final,a_initial=a_initial,a_final=a_final,T=T)
 
-                # Creating the path if not exist 
+                gTruths = []
+                # Creating the path if not exist
+                if not os.path.isdir(os.getcwd() + '/images'):
+                    os.mkdir(os.getcwd() + '/images')
+
+
+                # Creating the path if not exist
                 if not os.path.isdir('images/images-0'):
                     os.mkdir(os.getcwd() + '/images/' + 'images-{}'.format(self.loopCnt))
                     gTruths = []
