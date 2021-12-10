@@ -21,7 +21,7 @@ from createTraj import *
 
 
 class PoseSampler:
-    def __init__(self,v_avg=5, with_gate=True):
+    def __init__(self,v_avg=5, with_gate=True, velInc=False):
         self.num_samples = 1
         self.curr_idx = 0
         self.current_gate = 0
@@ -36,7 +36,9 @@ class PoseSampler:
         self.dtau=1e-2
         self.gTruths = []
 
+        self.velInc=velInc
         self.v_avg=v_avg
+        self.vAvgValues = [3., 6., 9.]
         self.traj=Traj_Planner()
         self.state=np.zeros(12)
         self.traj2=Traj()
@@ -44,7 +46,7 @@ class PoseSampler:
         self.radius = 20
 
         traj = Trajectory(self.gateNumber, self.gateNumber)
-        traj.buildHeightDiffTrajectory()
+        traj.buildSimpleTrajectory()
         traj.initDronePose()
         self.yaw_track = traj.yawTrack
         self.track = traj.track
@@ -273,7 +275,8 @@ class PoseSampler:
         self.client.simSetVehiclePose(QuadPose(self.state[[0, 1, 2, 3, 4, 5]]), True)
 
         index = 0
-        maxTurn = self.gateNumber * 2
+        turnCount = len(self.vAvgValues)
+        maxTurn = self.gateNumber * turnCount
         gTruths = []
         iNames = []
         while (True):
@@ -283,15 +286,18 @@ class PoseSampler:
             for i in range(1):
 
                 # Trajectory generate
-                waypoint_world = np.array([self.track[index % 12].position.x_val, self.track[index % 12].position.y_val,
-                                           self.track[index % 12].position.z_val])
+                waypoint_world = np.array([self.track[index % self.gateNumber].position.x_val,
+                                           self.track[index % self.gateNumber].position.y_val,
+                                           self.track[index % self.gateNumber].position.z_val])
                 posf = waypoint_world
-                yawf = self.yaw_track[index % 12] - np.pi / 2 - (int(index / 12)) * 2 * np.pi
+                yawf = self.yaw_track[index % self.gateNumber] - np.pi / 2 - (int(index / self.gateNumber)) * 2 * np.pi
 
                 pos0 = [self.state[0], self.state[1], self.state[2]]
                 vel0 = [self.state[6], self.state[7], self.state[8]]
                 ang_vel0 = [self.state[9], self.state[10], self.state[11]]
                 yaw0 = self.state[5]
+                if self.velInc:
+                    self.v_avg = self.vAvgValues[int(index/self.gateNumber)]
 
                 velf = [self.v_avg * np.cos(yawf), self.v_avg * np.sin(yawf), 0, 0]
 
@@ -331,7 +337,7 @@ class PoseSampler:
                     vel_target = [vel_target[0], vel_target[1], vel_target[2], 0, 0, vel_target[3]]
                     rho, phi, theta = cartesian_to_spherical(self.state, waypoint_world)
                     yawDif = yawf - self.state[5]
-                    print("wp: ", cartesian_to_spherical(self.state, waypoint_world), 'yaw: ', yawf - self.state[5])
+                    # print("wp: ", cartesian_to_spherical(self.state, waypoint_world), 'yaw: ', yawf - self.state[5])
                     gTruths.append([str(rho), str(phi), str(theta), str(yawDif - np.pi / 2)])  # yawDif - np.pi/2
                     iNames.append(sName)
                     self.total_cost += abs(np.sqrt(pow(quad_pose[0], 2) + pow(quad_pose[1], 2)) - 10)
