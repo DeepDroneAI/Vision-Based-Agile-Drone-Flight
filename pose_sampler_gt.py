@@ -34,45 +34,21 @@ class PoseSampler:
         self.configureEnvironment()
         self.total_cost=0
         self.dtau=1e-2
+        self.gTruths = []
 
         self.v_avg=v_avg
         self.traj=Traj_Planner()
         self.state=np.zeros(12)
         self.traj2=Traj()
+        self.gateNumber = 24
+        self.radius = 20
 
-        traj = Trajectory(24, 20)
-        traj.buildSimpleTrajectory()
+        traj = Trajectory(self.gateNumber, self.gateNumber)
+        traj.buildHeightDiffTrajectory()
+        traj.initDronePose()
         self.yaw_track = traj.yawTrack
         self.track = traj.track
-
-        #quat0 = R.from_euler('ZYX',[90.,0.,0.],degrees=True).as_quat()
-        #quat1 = R.from_euler('ZYX',[60.,0.,0.],degrees=True).as_quat()
-        #quat2 = R.from_euler('ZYX',[30.,0.,0.],degrees=True).as_quat()
-        #quat3 = R.from_euler('ZYX',[0.,0.,0.],degrees=True).as_quat()
-        #quat4 = R.from_euler('ZYX',[-30.,0.,0.],degrees=True).as_quat()
-        #quat5 = R.from_euler('ZYX',[-60.,0.,0.],degrees=True).as_quat()
-        #quat6 = R.from_euler('ZYX',[-90.,0.,0.],degrees=True).as_quat()
-        #quat7 = R.from_euler('ZYX',[-120.,0.,0.],degrees=True).as_quat()
-        #quat8 = R.from_euler('ZYX',[-150.,0.,0.],degrees=True).as_quat()
-        #quat9 = R.from_euler('ZYX',[-180.,0.,0.],degrees=True).as_quat()
-        #quat10 = R.from_euler('ZYX',[-210.,0.,0.],degrees=True).as_quat()
-        #quat11 = R.from_euler('ZYX',[-250.,0.,0.],degrees=True).as_quat()
-        #self.yaw_track=np.array([90,60,30,0,-30,-60,-90,-120,-150,-180,-210,-250])*np.pi/180
-        #self.track = [Pose(Vector3r(0.,10.,-2.) , Quaternionr(quat0[0],quat0[1],quat0[2],quat0[3])),
-        #              Pose(Vector3r(5.,8.66,-2) , Quaternionr(quat1[0],quat1[1],quat1[2],quat1[3])),
-        #              Pose(Vector3r(8.66,5.,-2) , Quaternionr(quat2[0],quat2[1],quat2[2],quat2[3])),
-        #              Pose(Vector3r(10.,0.,-2) , Quaternionr(quat3[0],quat3[1],quat3[2],quat3[3])),
-        #              Pose(Vector3r(8.66,-5.,-2) , Quaternionr(quat4[0],quat4[1],quat4[2],quat4[3])),
-        #              Pose(Vector3r(5.,-8.66,-2) , Quaternionr(quat5[0],quat5[1],quat5[2],quat5[3])),
-        #              Pose(Vector3r(0.,-10.,-2) , Quaternionr(quat6[0],quat6[1],quat6[2],quat6[3])),
-        #              Pose(Vector3r(-5.,-8.66,-2) , Quaternionr(quat7[0],quat7[1],quat7[2],quat7[3])),
-        #              Pose(Vector3r(-8.66,-5,-2) , Quaternionr(quat8[0],quat8[1],quat8[2],quat8[3])),
-        #              Pose(Vector3r(-10.,0,-2) , Quaternionr(quat9[0],quat9[1],quat9[2],quat9[3])),
-        #              Pose(Vector3r(-8.66,5.,-2) , Quaternionr(quat10[0],quat10[1],quat10[2],quat10[3])),
-        #              Pose(Vector3r(-5.,8.66,-2) , Quaternionr(quat11[0],quat11[1],quat11[2],quat11[3]))]
-            
-        quat_drone = R.from_euler('ZYX',[0.,0.,0.],degrees=True).as_quat()
-        self.drone_init = Pose(Vector3r(-5.,10.,-2), Quaternionr(quat_drone[0],quat_drone[1],quat_drone[2],quat_drone[3]))
+        self.drone_init = traj.droneInit
         self.saveCnt = 0 
         self.loopCnt = 0 
         self.distanceToGate = 1 
@@ -293,89 +269,98 @@ class PoseSampler:
         return check_arrival
 
     def fly_through_gates(self):
-        
-        self.client.simSetVehiclePose(QuadPose(self.state[[0,1,2,3,4,5]]), True)
+
+        self.client.simSetVehiclePose(QuadPose(self.state[[0, 1, 2, 3, 4, 5]]), True)
 
         index = 0
-        while(True):
-            if index==12*2:
+        maxTurn = self.gateNumber * 2
+        gTruths = []
+        iNames = []
+        while (True):
+            if index == maxTurn:
                 break
-
 
             for i in range(1):
 
                 # Trajectory generate
-                waypoint_world = np.array([self.track[index%12].position.x_val, self.track[index%12].position.y_val, self.track[index%12].position.z_val])
-                posf=waypoint_world
-                yawf=self.yaw_track[index%12]-np.pi/2-(int(index/12))*2*np.pi
+                waypoint_world = np.array([self.track[index % 12].position.x_val, self.track[index % 12].position.y_val,
+                                           self.track[index % 12].position.z_val])
+                posf = waypoint_world
+                yawf = self.yaw_track[index % 12] - np.pi / 2 - (int(index / 12)) * 2 * np.pi
 
                 pos0 = [self.state[0], self.state[1], self.state[2]]
                 vel0 = [self.state[6], self.state[7], self.state[8]]
                 ang_vel0 = [self.state[9], self.state[10], self.state[11]]
                 yaw0 = self.state[5]
 
-                velf=[self.v_avg*np.cos(yawf),self.v_avg*np.sin(yawf),0,0]
+                velf = [self.v_avg * np.cos(yawf), self.v_avg * np.sin(yawf), 0, 0]
 
-                x_initial=[pos0[0],pos0[1],pos0[2],yaw0]
-                x_final=[posf[0],posf[1],posf[2],yawf]
-                vel_initial=[vel0[0],vel0[1],vel0[2],ang_vel0[2]]
-                vel_final=velf
-                a_initial=[0,0,0,0]
-                a_final=[0,0,0,0]
-                pose_err=0
+                x_initial = [pos0[0], pos0[1], pos0[2], yaw0]
+                x_final = [posf[0], posf[1], posf[2], yawf]
+                vel_initial = [vel0[0], vel0[1], vel0[2], ang_vel0[2]]
+                vel_final = velf
+                a_initial = [0, 0, 0, 0]
+                a_final = [0, 0, 0, 0]
+                pose_err = 0
                 for j in range(3):
-                    pose_err+=pow(x_final[j]-pos0[j],2)
+                    pose_err += pow(x_final[j] - pos0[j], 2)
 
-                pose_err=np.sqrt(pose_err)
-                T=pose_err/(self.v_avg)
-                N=int(T/self.dtau)
-                t=np.linspace(0,T,N)
-                self.traj.find_traj(x_initial=x_initial,x_final=x_final,v_initial=vel_initial,v_final=vel_final,T=T)
-                #self.traj.find_traj(x_initial=x_initial,x_final=x_final,v_initial=vel_initial,v_final=vel_final,a_initial=a_initial,a_final=a_final,T=T)
-
-                gTruths = []
-                # Creating the path if not exist
-                if not os.path.isdir(os.getcwd() + '/images'):
-                    os.mkdir(os.getcwd() + '/images')
-
+                pose_err = np.sqrt(pose_err)
+                T = pose_err / (self.v_avg)
+                N = int(T / self.dtau)
+                t = np.linspace(0, T, N)
+                self.traj.find_traj(x_initial=x_initial, x_final=x_final, v_initial=vel_initial, v_final=vel_final, T=T)
+                # self.traj.find_traj(x_initial=x_initial,x_final=x_final,v_initial=vel_initial,v_final=vel_final,a_initial=a_initial,a_final=a_final,T=T)
 
                 # Creating the path if not exist
                 if not os.path.isdir('images/images-0'):
                     os.mkdir(os.getcwd() + '/images/' + 'images-{}'.format(self.loopCnt))
                     gTruths = []
 
-                t_current=0.0
+                # Creating the path if not exist
+                if not os.path.isdir('images/images-0'):
+                    os.mkdir(os.getcwd() + '/images/' + 'images-{}'.format(self.loopCnt))
+
+                t_current = 0.0
                 for k in range(len(t)):
-                    t_current=t[k] 
-                    sName = self.getInstantaneousImg(save=True) # getting img dataset
-                    target=self.traj.get_target(t_current)
-                    vel_target=self.traj.get_vel(t_current)
+                    t_current = t[k]
+                    sName = self.getInstantaneousImg(save=True)  # getting img dataset
+                    target = self.traj.get_target(t_current)
+                    vel_target = self.traj.get_vel(t_current)
                     quad_pose = [target[0], target[1], target[2], 0, 0, target[3]]
-                    vel_target=[vel_target[0], vel_target[1], vel_target[2], 0, 0, vel_target[3]]
+                    vel_target = [vel_target[0], vel_target[1], vel_target[2], 0, 0, vel_target[3]]
                     rho, phi, theta = cartesian_to_spherical(self.state, waypoint_world)
                     yawDif = yawf - self.state[5]
-                    print("wp: ", cartesian_to_spherical(self.state,  waypoint_world), 'yaw: ', yawf - self.state[5])
-                    gTruths.append([sName, str(rho), str(phi), str(theta), str(yawDif)])
-                    self.total_cost+=abs(np.sqrt(pow(quad_pose[0],2)+pow(quad_pose[1],2))-10)
-                    self.state=np.array([target[0],target[1],target[2],0,0,target[3],vel_target[0],vel_target[1],vel_target[2],0,0,vel_target[3]])
+                    print("wp: ", cartesian_to_spherical(self.state, waypoint_world), 'yaw: ', yawf - self.state[5])
+                    gTruths.append([str(rho), str(phi), str(theta), str(yawDif - np.pi / 2)])  # yawDif - np.pi/2
+                    iNames.append(sName)
+                    self.total_cost += abs(np.sqrt(pow(quad_pose[0], 2) + pow(quad_pose[1], 2)) - 10)
+                    self.state = np.array(
+                        [target[0], target[1], target[2], 0, 0, target[3], vel_target[0], vel_target[1], vel_target[2],
+                         0, 0, vel_target[3]])
                     self.client.simSetVehiclePose(QuadPose(quad_pose), True)
                     # time.sleep(.01)
                     # print("own    position: ", quad_pose[:3])
                     # print("target position: ", waypoint_world)
-                    self.distanceToGate = round(dist3dp(quad_pose, waypoint_world), 2) 
+                    self.distanceToGate = round(dist3dp(quad_pose, waypoint_world), 2)
                     # print("distance: ", self.distanceToGate)
                     if self.distanceToGate < 1.0 and self.saveChanged:
-                        self.writeGroundTruthVals(gTruths)
-                        gTruths = []
-                        self.loopCnt += 1 
-                        self.saveChanged = False 
+                        # gTruths = []
+                        # iNames = []
+                        # self.loopCnt += 1
+                        self.loopCnt = min(maxTurn - 1, self.loopCnt)
+                        self.saveChanged = False
                         # print("PATHFOLDER CHANGED")
                         if not os.path.isdir('images/images-{}'.format(self.loopCnt)):
                             os.mkdir(os.getcwd() + '/images/' + 'images-{}'.format(self.loopCnt))
+                        break
 
                 index += 1
-                self.saveChanged = True 
-
+                self.saveChanged = True
+            #    if index > 10:
+            #        break
+            #print("yaz")
+            self.writeGroundTruthVals(gTruths, iNames)
 
     def update(self, mode):
         '''
@@ -387,20 +372,21 @@ class PoseSampler:
         b: UAV body frame
         g: gate frame
         '''
-        
-        #self.client.simSetObjectPose(self.tgt_name, p_o_g_new, True)
-        #min_vel, min_acc, min_jerk, pos_waypoint_interp, min_acc_stop, min_jerk_full_stop
+
+        # self.client.simSetObjectPose(self.tgt_name, p_o_g_new, True)
+        # min_vel, min_acc, min_jerk, pos_waypoint_interp, min_acc_stop, min_jerk_full_stop
         MP_list = ["min_acc", "min_jerk", "min_jerk_full_stop", "min_vel"]
-        #MP_list = ["min_vel"]
+        # MP_list = ["min_vel"]
 
         if self.with_gate:
             # gate_name = "gate_0"
             # self.tgt_name = self.client.simSpawnObject(gate_name, "RedGate16x16", Pose(position_val=Vector3r(0,0,15)), 0.75)
             # self.client.simSetObjectPose(self.tgt_name, self.track[0], True)
             for i, gate in enumerate(self.track):
-                #print ("gate: ", gate)
+                # print ("gate: ", gate)
                 gate_name = "gate_" + str(i)
-                self.tgt_name = self.client.simSpawnObject(gate_name, "RedGate16x16", Pose(position_val=Vector3r(0,0,15)), 0.75)
+                self.tgt_name = self.client.simSpawnObject(gate_name, "RedGate16x16",
+                                                           Pose(position_val=Vector3r(0, 0, 15)), 0.75)
                 self.client.simSetObjectPose(self.tgt_name, gate, True)
         # request quad img from AirSim
         time.sleep(0.001)
@@ -408,18 +394,16 @@ class PoseSampler:
         if mode == "FLY":
             self.fly_through_gates()
         print("trajectory_cost:{}".format(self.total_cost))
-        
 
-                    
     def configureEnvironment(self):
         for gate_object in self.client.simListSceneObjects(".*[Gg]ate.*"):
             self.client.simDestroyObject(gate_object)
             time.sleep(0.05)
         if self.with_gate:
-            self.tgt_name = self.client.simSpawnObject("gate", "RedGate16x16", Pose(position_val=Vector3r(0,0,15)), 0.75)
+            self.tgt_name = self.client.simSpawnObject("gate", "RedGate16x16", Pose(position_val=Vector3r(0, 0, 15)),
+                                                       0.75)
         else:
             self.tgt_name = "empty_target"
-
 
     # writes your data to file
     def writePosToFile(self, r, theta, psi, phi_rel):
@@ -427,29 +411,38 @@ class PoseSampler:
         self.file.write(data_string)
 
     def getInstantaneousImg(self, save=False):
-        self.client.simSetVehiclePose(QuadPose(self.state[[0,1,2,3,4,5]]), True)
+        self.client.simSetVehiclePose(QuadPose(self.state[[0, 1, 2, 3, 4, 5]]), True)
         image_response = self.client.simGetImages([airsim.ImageRequest('0', airsim.ImageType.Scene, False, False)])[0]
-        #if len(image_response.image_data_uint8) == image_response.width * image_response.height * 3:
+        # if len(image_response.image_data_uint8) == image_response.width * image_response.height * 3:
         img1d = np.fromstring(image_response.image_data_uint8, dtype=np.uint8)  # get numpy array
-        img_rgb = img1d.reshape(image_response.height, image_response.width, 3)  # reshape array to 4 channel image array H X W X 3
+        img_rgb = img1d.reshape(image_response.height, image_response.width,
+                                3)  # reshape array to 4 channel image array H X W X 3
         # img_rgb = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2RGB)
         # anyGate = self.isThereAnyGate(img_rgb)
         cwd = os.getcwd()
         if save:
+            # saveName = cwd + '/images/images-{}'.format(self.loopCnt) + "/frame000" + str(self.saveCnt) + '.png'
             saveName = cwd + '/images/images-{}'.format(self.loopCnt) + "/frame000" + str(self.saveCnt) + '.png'
-            cv2.imwrite(os.path.join(saveName) ,img_rgb)
+            cv2.imwrite(os.path.join(saveName), img_rgb)
             # print(os.path.join(cwd + '/images/images-{}'.format(self.loopCnt) + "/frame000" + str(self.saveCnt)) + 'dist->' + str(self.distanceToGate) + '.png')
-            self.saveCnt += 1 
-        # img =  Image.fromarray(img_rgb)
-        # image = self.transformation(img) 
-        # return saveName 
-        return "/frame000" + str(self.saveCnt) + '.png' 
+            self.saveCnt += 1
+            # img =  Image.fromarray(img_rgb)
+        # image = self.transformation(img)
+        # return saveName
+        return "/images/images-{}/frame000".format(self.loopCnt) + str(self.saveCnt - 1) + '.png'
 
-    def writeGroundTruthVals(self, gTruths):
+    def writeGroundTruthVals(self, gTruths, imageNames):
         cwd = os.getcwd()
-        if not os.path.isfile(cwd + '/images/images-{}/groundTruths-{}.txt'.format(self.loopCnt, self.loopCnt)):
-            open(cwd + '/images/images-{}/groundTruths-{}.txt'.format(self.loopCnt, self.loopCnt), 'w')
-        txtName = cwd + '/images/images-{}/groundTruths-{}.txt'.format(self.loopCnt, self.loopCnt)
-        with open(txtName, "w") as writtenTxt:
+        if not os.path.isfile(cwd + '/images/images-{}/image_labels-{}.txt'.format(self.loopCnt, self.loopCnt)):
+            open(cwd + '/images/images-{}/image_labels-{}.txt'.format(self.loopCnt, self.loopCnt), 'w')
+        txt1Name = cwd + '/images/images-{}/image_labels-{}.txt'.format(self.loopCnt, self.loopCnt)
+        with open(txt1Name, "w") as writtenTxt:
             for line in gTruths:
                 writtenTxt.write(" ".join(line) + "\n")
+
+        if not os.path.isfile(cwd + '/images/images-{}/image_names-{}.txt'.format(self.loopCnt, self.loopCnt)):
+            open(cwd + '/images/images-{}/image_names-{}.txt'.format(self.loopCnt, self.loopCnt), 'w')
+        txt2Name = cwd + '/images/images-{}/image_names-{}.txt'.format(self.loopCnt, self.loopCnt)
+        with open(txt2Name, "w") as writtenTxt:
+            for line in imageNames:
+                writtenTxt.write("".join(line) + "\n")
