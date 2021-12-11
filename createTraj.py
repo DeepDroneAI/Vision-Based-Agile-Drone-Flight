@@ -17,6 +17,8 @@ class Trajectory:
         self.gateHeight = 2
         self.yawTrack = None
         self.possibleGateHeights = [-1., -0.5, 0.0, 0.5, 1.]
+        self.upBound = 1.
+        self.lowBound = - self.upBound
 
     def initDronePose(self):
         dronePoseRadius = self.r * 21/20.0
@@ -60,6 +62,41 @@ class Trajectory:
             mainQuaternion = Quaternionr(rotationQuat[0], rotationQuat[1], rotationQuat[2], rotationQuat[3])
             self.track.append(Pose(vectorOfGate, mainQuaternion))
         self.yawTrack = np.array(yawTrack)
+
+    def randomPosedTrajectory(self):
+        angleBetween = self.circleAngle / self.gateNum
+        yawTrack = []
+        for i in range(self.gateNum):
+            if self.clockwise:
+                currAngle = self.startAngle - angleBetween * i
+            else:
+                currAngle = self.startAngle + angleBetween * i
+            yawTrack.append(currAngle * np.pi / 180)
+            randomZPick = np.random.random() * (self.upBound - self.lowBound) + self.lowBound
+            vectorOfGate = twoDPolarTranslation(self.r, currAngle,
+                                                -(self.gateHeight + randomZPick))
+            randomXPick = np.random.random() * (self.upBound - self.lowBound) + self.lowBound
+            vectorOfGate.x_val += randomXPick * np.cos(np.radians(currAngle))
+            vectorOfGate.y_val += randomXPick * np.sin(np.radians(currAngle))
+            rotationQuat = Rotation.from_euler('ZYX', [currAngle, 0., 0.], degrees=True).as_quat()
+            mainQuaternion = Quaternionr(rotationQuat[0], rotationQuat[1], rotationQuat[2], rotationQuat[3])
+            self.track.append(Pose(vectorOfGate, mainQuaternion))
+        self.yawTrack = np.array(yawTrack)
+
+    def pickRandomGatePose(self, indexOfGate):
+        if self.clockwise:
+            angleOfGate = self.startAngle - (self.circleAngle / self.gateNum) * indexOfGate
+        else:
+            angleOfGate = self.startAngle + (self.circleAngle / self.gateNum) * indexOfGate
+        randomXPick = np.random.random() * (self.upBound - self.lowBound) + self.lowBound
+        randomZPick = np.random.random() * (self.upBound - self.lowBound) + self.lowBound
+        rotationQuat = Rotation.from_euler('ZYX', [angleOfGate, 0., 0.], degrees=True).as_quat()
+        qtG = Quaternionr(rotationQuat[0], rotationQuat[1], rotationQuat[2], rotationQuat[3])
+        vectorOfGate = twoDPolarTranslation(self.r, angleOfGate,
+                                            -(self.gateHeight + randomZPick))
+        vectorOfGate.x_val += randomXPick * np.cos(np.radians(angleOfGate))
+        vectorOfGate.y_val += randomXPick * np.sin(np.radians(angleOfGate))
+        return Pose(vectorOfGate, qtG)
 
 
 if __name__ == '__main__':
