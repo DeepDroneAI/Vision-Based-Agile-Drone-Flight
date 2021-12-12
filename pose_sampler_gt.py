@@ -365,6 +365,7 @@ class PoseSampler:
                         # iNames = []
                         # self.loopCnt += 1
                         self.loopCnt = min(maxTurn - 1, self.loopCnt)
+                        print('gate_' + str((index - 1) % self.gateNumber))
                         self.destroyAndSpawnGate('gate_' + str((index - 1) % self.gateNumber))
                         self.saveChanged = False
                         # print("PATHFOLDER CHANGED")
@@ -384,14 +385,14 @@ class PoseSampler:
         for gate_object in self.client.simListSceneObjects(".*[Gg]ate.*"):
             print(gate_object)
         # destroy the object
-        self.client.simDestroyObject(gateName)
+        #self.client.simDestroyObject(gateName)
         print("object destroyed: {}".format(gateName))
         # Spawn the gate again with different pose
         gateIndex = int(gateName.split('_')[1])
         poseVector = self.path.pickRandomGatePose(gateIndex)
-        tgt_name = self.client.simSpawnObject(gateName, "RedGate16x16",
-                                              Pose(position_val=Vector3r(0, 0, 15)), 0.75)
-        self.client.simSetObjectPose(tgt_name, poseVector, True)
+        #tgt_name = self.client.simSpawnObject(gateName, "RedGate16x16",
+                                              #Pose(position_val=Vector3r(0, 0, 15)), 0.75)
+        self.client.simSetObjectPose(self.tgt_name[gateIndex], poseVector, True)
         print("object spawned: {} \nx:{}\ny:{}\nz:{}".format(gateName, poseVector.position.x_val,
                                                            poseVector.position.y_val,
                                                            poseVector.position.z_val))
@@ -417,12 +418,13 @@ class PoseSampler:
             # gate_name = "gate_0"
             # self.tgt_name = self.client.simSpawnObject(gate_name, "RedGate16x16", Pose(position_val=Vector3r(0,0,15)), 0.75)
             # self.client.simSetObjectPose(self.tgt_name, self.track[0], True)
+            self.tgt_name = []
             for i, gate in enumerate(self.track):
                 # print ("gate: ", gate)
                 gate_name = "gate_" + str(i)
-                self.tgt_name = self.client.simSpawnObject(gate_name, "RedGate16x16",
-                                                           Pose(position_val=Vector3r(0, 0, 15)), 0.75)
-                self.client.simSetObjectPose(self.tgt_name, gate, True)
+                self.tgt_name.append(self.client.simSpawnObject(gate_name, "RedGate16x16",
+                                                           Pose(position_val=Vector3r(0, 0, 15)), 0.75))
+                self.client.simSetObjectPose(self.tgt_name[i], gate, True)
 
         # request quad img from AirSim
         time.sleep(0.001)
