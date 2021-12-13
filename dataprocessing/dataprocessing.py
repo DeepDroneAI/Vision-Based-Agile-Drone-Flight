@@ -44,7 +44,7 @@ class DatasetProcessing():
             img -= 1"""
             
         
-        label = torch.from_numpy(self.label[index])
+        label = torch.from_numpy(np.array(self.label[index]))
         
         return img, label
 

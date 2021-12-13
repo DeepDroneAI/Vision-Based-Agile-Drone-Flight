@@ -1,4 +1,4 @@
-from pose_sampler_gt import *
+from pose_sampler_loop import *
 import time
 import argparse
 parser = argparse.ArgumentParser(description='CHP')
@@ -11,7 +11,8 @@ mode = "FLY"
 
 def main():
 	ti=time.time()
-	pose_sampler = PoseSampler(v_avg=args.v_avg, velInc=args.vel_increase)
+	pose_sampler = PoseSampler(v_avg=args.v_avg)
+	#pose_sampler = PoseSampler(v_avg=args.v_avg, velInc=args.vel_increase)
 	pose_sampler.update(mode)
 	
 

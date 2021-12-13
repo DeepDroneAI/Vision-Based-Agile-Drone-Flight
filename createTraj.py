@@ -17,7 +17,7 @@ class Trajectory:
         self.gateHeight = 2
         self.yawTrack = None
         self.possibleGateHeights = [-1., -0.5, 0.0, 0.5, 1.]
-        self.upBound = 1.
+        self.upBound = .01
         self.lowBound = - self.upBound
 
     def initDronePose(self):

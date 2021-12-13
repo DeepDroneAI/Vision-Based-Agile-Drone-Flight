@@ -28,15 +28,9 @@ import Dronet
 import lstmf
 
 
-
-
-
-
-
-
 class PoseSampler:
     def __init__(self,v_avg=5, with_gate=True):
-        self.base_path="/home/drone-ai/Documents/Traj_Test"
+        self.base_path="/home/drone-ai/Documents/Github/Vision-Based-Agile-Drone-Flight"
         self.num_samples = 1
         self.curr_idx = 0
         self.current_gate = 0
@@ -55,7 +49,7 @@ class PoseSampler:
         self.Dronet =  Dronet.ResNet(Dronet.BasicBlock, [1,1,1,1], num_classes = 4)
         self.Dronet.to(self.device)
         #print("Dronet Model:", self.Dronet)
-        self.Dronet.load_state_dict(torch.load(self.base_path+'/weights/16_0.001_2_loss_0.0101_PG.pth',map_location=torch.device('cpu')))   
+        self.Dronet.load_state_dict(torch.load(self.base_path+'/weights/16_0.001_26_loss_0.0405_PG.pth',map_location=torch.device('cpu')))   
         self.Dronet.eval()
 
         # LstmR
@@ -411,7 +405,7 @@ class PoseSampler:
                 #print("Dronet output-->pose:{}  yaw:{}".format(posf,yawf*180/np.pi))
                 #print("Graunt Truth output-->pose:{}  yaw:{}".format(waypoint_world_real,self.yaw_track[index]*180/np.pi-90))
                 
-                vel_des=min(current_vel+2,self.v_avg)
+                vel_des=min(current_vel+.2,self.v_avg)
 
                 velf=[vel_des*np.cos(yawf),vel_des*np.sin(yawf),0,0]
 

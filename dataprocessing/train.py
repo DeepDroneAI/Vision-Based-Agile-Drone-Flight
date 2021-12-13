@@ -32,19 +32,19 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 #ata_path = '/home/deepdrone/Dataset/OurBasic'
 
-data_path = "/home/recep/dataprocessing/data"
+data_path = "/home/drone-ai/Documents/Github/Vision-Based-Agile-Drone-Flight/dataprocessing/Dataset_Dronet"
 
-train_data = 'train'
+train_data = 'train_data'
 
 train_label_file = 'train_labels.txt'
 
-train_image_file = 'train_img.txt'
+train_image_file = 'train_im_names2.txt'
 
-val_data = 'val'
+val_data = 'val_data'
 
 val_label_file = 'val_labels.txt'
 
-val_image_file = 'val_img.txt'
+val_image_file = 'val_im_names2.txt'
 
 #print("###############DataPath is given.#################")
 #----------------------------------------------------------------------------------
@@ -115,7 +115,14 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                     outputs = model(inputs)            
  
                     # Loss implementation
+                    outputs[:,1]*=5
+                    outputs[:,2]*=5
+                    outputs[:,3]*=10
+                    labels[:,1]*=5
+                    labels[:,2]*=5
+                    labels[:,3]*=10
                     loss = criterion(outputs, labels)
+
                     
                     # backward + optimize only if in training phase
                     if phase == 'train':
@@ -139,9 +146,9 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
             
 
             # deep copy the model
-            if phase == 'val' and epoch_loss < best_loss:
+            if phase == 'val' and epoch%10==0 and epoch!=0:
                 best_loss = epoch_loss
-                torch.save(model.state_dict(),'/home/recep/dataprocessing/model/{}_{}_{}_loss_{:.4f}_PG.pth'.format(batch_size,lr,epoch, epoch_loss))
+                torch.save(model.state_dict(),'/home/drone-ai/Documents/Github/Vision-Based-Agile-Drone-Flight/dataprocessing/model_2/{}_{}_{}_loss_{:.4f}_PG.pth'.format(batch_size,lr,epoch, epoch_loss))
                 print("{}_{}_{}_Pg.pth file is saved".format(batch_size,lr,epoch))
                   
                   
@@ -196,7 +203,7 @@ if __name__ == "__main__":
 
             #---------------------------------Import Model-------------------------------------
             model_ft =  ResNet(BasicBlock, [1,1,1,1], num_classes = 4)
-            model_ft.load_state_dict(torch.load('/home/recep/deep-drone-traj/weights/Dronet_new.pth'))   
+            #model_ft.load_state_dict(torch.load('/home/recep/deep-drone-traj/weights/Dronet_new.pth'))   
             #print(model_ft)
             print("Model is Updated.")
             model_ft = model_ft.to(device)
