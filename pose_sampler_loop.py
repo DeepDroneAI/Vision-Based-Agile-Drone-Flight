@@ -23,7 +23,7 @@ from torchvision import models, transforms
 from torchvision.transforms.functional import normalize, resize, to_tensor
 from PIL import Image
 import cv2
-
+from createTraj import *
 import Dronet
 import lstmf
 
@@ -49,7 +49,7 @@ class PoseSampler:
         self.Dronet =  Dronet.ResNet(Dronet.BasicBlock, [1,1,1,1], num_classes = 4)
         self.Dronet.to(self.device)
         #print("Dronet Model:", self.Dronet)
-        self.Dronet.load_state_dict(torch.load(self.base_path+'/weights/16_0.001_26_loss_0.0405_PG.pth',map_location=torch.device('cpu')))   
+        self.Dronet.load_state_dict(torch.load(self.base_path+'/weights/16_0.001_2_loss_0.0101_PG.pth',map_location=torch.device('cpu')))   
         self.Dronet.eval()
 
         # LstmR
@@ -88,47 +88,25 @@ class PoseSampler:
         self.v_avg=v_avg
         self.traj=Traj_Planner()
         self.state=np.zeros(12)
+        self.gateNumber=18
+        self.radius=20
 
-        quat0 = R.from_euler('ZYX',[90.,0.,0.],degrees=True).as_quat()
-        quat1 = R.from_euler('ZYX',[60.,0.,0.],degrees=True).as_quat()
-        quat2 = R.from_euler('ZYX',[30.,0.,0.],degrees=True).as_quat()
-        quat3 = R.from_euler('ZYX',[0.,0.,0.],degrees=True).as_quat()
-        quat4 = R.from_euler('ZYX',[-30.,0.,0.],degrees=True).as_quat() 
-        quat5 = R.from_euler('ZYX',[-60.,0.,0.],degrees=True).as_quat() 
-        quat6 = R.from_euler('ZYX',[-90.,0.,0.],degrees=True).as_quat()
-        quat7 = R.from_euler('ZYX',[-120.,0.,0.],degrees=True).as_quat()
-        quat8 = R.from_euler('ZYX',[-150.,0.,0.],degrees=True).as_quat()
-        quat9 = R.from_euler('ZYX',[-180.,0.,0.],degrees=True).as_quat()
-        quat10 = R.from_euler('ZYX',[-210.,0.,0.],degrees=True).as_quat()
-        quat11 = R.from_euler('ZYX',[-250.,0.,0.],degrees=True).as_quat()
-        self.yaw_track=np.array([90,60,30,0,-30,-60,-90,-120,-150,-180,-210,-250])*np.pi/180
-        """self.track = [Pose(Vector3r(0.,10.,-2.) , Quaternionr(quat0[0],quat0[1],quat0[2],quat0[3])),
-                    Pose(Vector3r(5.,8.66,-2) , Quaternionr(quat1[0],quat1[1],quat1[2],quat1[3])),
-                    Pose(Vector3r(8.66,5.,-2) , Quaternionr(quat2[0],quat2[1],quat2[2],quat2[3])),
-                    Pose(Vector3r(10.,0.,-2) , Quaternionr(quat3[0],quat3[1],quat3[2],quat3[3])),
-                    Pose(Vector3r(8.66,-5.,-2) , Quaternionr(quat4[0],quat4[1],quat4[2],quat4[3])),
-                    Pose(Vector3r(5.,-8.66,-2) , Quaternionr(quat5[0],quat5[1],quat5[2],quat5[3])), 
-                    Pose(Vector3r(0.,-10.,-2) , Quaternionr(quat6[0],quat6[1],quat6[2],quat6[3])),
-                    Pose(Vector3r(-5.,-8.66,-2) , Quaternionr(quat7[0],quat7[1],quat7[2],quat7[3])),
-                    Pose(Vector3r(-8.66,-5,-2) , Quaternionr(quat8[0],quat8[1],quat8[2],quat8[3])),
-                    Pose(Vector3r(-10.,0,-2) , Quaternionr(quat9[0],quat9[1],quat9[2],quat9[3])),
-                    Pose(Vector3r(-8.66,5.,-2) , Quaternionr(quat10[0],quat10[1],quat10[2],quat10[3])),
-                    Pose(Vector3r(-5.,8.66,-2) , Quaternionr(quat11[0],quat11[1],quat11[2],quat11[3]))]
-            
-        quat_drone = R.from_euler('ZYX',[0.,0.,0.],degrees=True).as_quat()
-        self.drone_init = Pose(Vector3r(-5.,10.,-2), Quaternionr(quat_drone[0],quat_drone[1],quat_drone[2],quat_drone[3]))"""
-        self.track = [Pose(Vector3r(0.,2*10.,-2.) , Quaternionr(quat0[0],quat0[1],quat0[2],quat0[3])),
-                    Pose(Vector3r(2*5.,2*8.66,-2) , Quaternionr(quat1[0],quat1[1],quat1[2],quat1[3])),
-                    Pose(Vector3r(2*8.66,2*5.,-2) , Quaternionr(quat2[0],quat2[1],quat2[2],quat2[3])),
-                    Pose(Vector3r(2*10.,0.,-2) , Quaternionr(quat3[0],quat3[1],quat3[2],quat3[3])),
-                    Pose(Vector3r(2*8.66,2*-5.,-2) , Quaternionr(quat4[0],quat4[1],quat4[2],quat4[3])),
-                    Pose(Vector3r(2*5.,2*-8.66,-2) , Quaternionr(quat5[0],quat5[1],quat5[2],quat5[3])), 
-                    Pose(Vector3r(0.,2*-10.,-2) , Quaternionr(quat6[0],quat6[1],quat6[2],quat6[3])),
-                    Pose(Vector3r(2*-5.,2*-8.66,-2) , Quaternionr(quat7[0],quat7[1],quat7[2],quat7[3])),
-                    Pose(Vector3r(2*-8.66,2*-5,-2) , Quaternionr(quat8[0],quat8[1],quat8[2],quat8[3])),
-                    Pose(Vector3r(2*-10.,0,-2) , Quaternionr(quat9[0],quat9[1],quat9[2],quat9[3])),
-                    Pose(Vector3r(2*-8.66,2*5.,-2) , Quaternionr(quat10[0],quat10[1],quat10[2],quat10[3])),
-                    Pose(Vector3r(2*-5.,2*8.66,-2) , Quaternionr(quat11[0],quat11[1],quat11[2],quat11[3]))]
+        self.path = Trajectory(self.gateNumber, self.radius)
+        self.path.randomPosedTrajectory()
+        self.path.initDronePose()
+        self.yaw_track = self.path.yawTrack
+        self.track = self.path.track
+        self.drone_init = self.path.droneInit
+        self.saveCnt = 0
+        self.loopCnt = 0
+        self.distanceToGate = 1
+        self.saveChanged = True
+
+        self.track = self.track  # for circle trajectory change this with circle_track
+        self.drone_init = self.drone_init  # for circle trajectory change this with drone_init_circle
+        self.state = np.array(
+            [self.drone_init.position.x_val, self.drone_init.position.y_val, self.drone_init.position.z_val, 0, 0,
+             self.yaw_track[0] - np.pi / 2, 0, 0, 0, 0, 0, 0])
             
         quat_drone = R.from_euler('ZYX',[0.,0.,0.],degrees=True).as_quat()
         self.drone_init = Pose(Vector3r(-5.,2*10.,-2), Quaternionr(quat_drone[0],quat_drone[1],quat_drone[2],quat_drone[3]))        
@@ -405,7 +383,7 @@ class PoseSampler:
                 #print("Dronet output-->pose:{}  yaw:{}".format(posf,yawf*180/np.pi))
                 #print("Graunt Truth output-->pose:{}  yaw:{}".format(waypoint_world_real,self.yaw_track[index]*180/np.pi-90))
                 
-                vel_des=min(current_vel+.2,self.v_avg)
+                vel_des=min(current_vel+1,self.v_avg)
 
                 velf=[vel_des*np.cos(yawf),vel_des*np.sin(yawf),0,0]
 

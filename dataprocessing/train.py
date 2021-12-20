@@ -115,12 +115,12 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                     outputs = model(inputs)            
  
                     # Loss implementation
-                    outputs[:,1]*=5
-                    outputs[:,2]*=5
-                    outputs[:,3]*=10
-                    labels[:,1]*=5
-                    labels[:,2]*=5
-                    labels[:,3]*=10
+                    outputs[:,1]*=1
+                    outputs[:,2]*=1
+                    outputs[:,3]*=2
+                    labels[:,1]*=1
+                    labels[:,2]*=1
+                    labels[:,3]*=2
                     loss = criterion(outputs, labels)
 
                     
@@ -146,7 +146,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
             
 
             # deep copy the model
-            if phase == 'val' and epoch%10==0 and epoch!=0:
+            if phase == 'val' and epoch%2==0 and epoch!=0:
                 best_loss = epoch_loss
                 torch.save(model.state_dict(),'/home/drone-ai/Documents/Github/Vision-Based-Agile-Drone-Flight/dataprocessing/model_2/{}_{}_{}_loss_{:.4f}_PG.pth'.format(batch_size,lr,epoch, epoch_loss))
                 print("{}_{}_{}_Pg.pth file is saved".format(batch_size,lr,epoch))
@@ -203,7 +203,7 @@ if __name__ == "__main__":
 
             #---------------------------------Import Model-------------------------------------
             model_ft =  ResNet(BasicBlock, [1,1,1,1], num_classes = 4)
-            #model_ft.load_state_dict(torch.load('/home/recep/deep-drone-traj/weights/Dronet_new.pth'))   
+            model_ft.load_state_dict(torch.load('/home/drone-ai/Documents/Github/Vision-Based-Agile-Drone-Flight/weights/Dronet_new.pth'))   
             #print(model_ft)
             print("Model is Updated.")
             model_ft = model_ft.to(device)
@@ -212,7 +212,7 @@ if __name__ == "__main__":
             #-----------------------------------Optimizer--------------------------------------
             #optimizer_ft = optim.SGD(model_ft.parameters(), lr = lr, momentum=0.9)
             optimizer_ft = optim.Adam(model_ft.parameters(), lr=lr, weight_decay = 0.001)
-            epochh = 50
+            epochh = 11
             exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=0.001, gamma=0.1) #step size = lr
             #----------------------------------------------------------------------------------
             
