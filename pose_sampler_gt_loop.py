@@ -26,7 +26,6 @@ import cv2
 from createTraj import *
 import Dronet
 import lstmf
-import threading
 
 
 class PoseSampler:
@@ -44,8 +43,6 @@ class PoseSampler:
         self.configureEnvironment()
         self.total_cost=0
         self.dtau=1e-2
-        self.client2 = airsim.MultirotorClient()
-        self.client2.confirmConnection()
 
         # Dronet
         self.device = torch.device("cpu")
@@ -110,18 +107,6 @@ class PoseSampler:
         self.state = np.array(
             [self.drone_init.position.x_val, self.drone_init.position.y_val, self.drone_init.position.z_val, 0, 0,
              self.yaw_track[0] - np.pi / 2, 0, 0, 0, 0, 0, 0])
-            
-        quat_drone = R.from_euler('ZYX',[0.,0.,0.],degrees=True).as_quat()
-        self.drone_init = Pose(Vector3r(-5.,2*10.,-2), Quaternionr(quat_drone[0],quat_drone[1],quat_drone[2],quat_drone[3])) 
-        self.posf=[self.track[0].position.x_val, self.track[0].position.y_val, self.track[0].position.z_val]  
-        self.yawf=self.yaw_track[0]-np.pi/2    
-        self.index=0
-        self.yaw0 = self.state[8]
-
-        self.track = self.track # for circle trajectory change this with circle_track
-        self.drone_init = self.drone_init # for circle trajectory change this with drone_init_circle
-        self.state=np.array([self.drone_init.position.x_val,self.drone_init.position.y_val,-self.drone_init.position.z_val,0,0,self.yaw_track[0]-np.pi/2,0,0,0,0,0,0])
-        #-----------------------------------------------------------------------             
 
 
     def find_gate_distances(self):
@@ -334,101 +319,41 @@ class PoseSampler:
 
         return u
 
-    def run_dronet(self,image_response):
-        img1d = np.fromstring(image_response.image_data_uint8, dtype=np.uint8)  # get numpy array
-        img_rgb = img1d.reshape(image_response.height, image_response.width, 3)  # reshape array to 4 channel image array H X W X 3
-        img_rgb = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2RGB)
-        # anyGate = self.isThereAnyGate(img_rgb)
-        #cv2.imwrite(os.path.join(self.base_path, 'images', "frame" + str(self.curr_idx).zfill(len(str(self.num_samples))) + '.png'), img_rgb)
-        img =  Image.fromarray(img_rgb)
-        image = self.transformation(img)  
-        pose_gate_body = self.Dronet(image)
-
-        return pose_gate_body 
-
-    def dronet_to_body(self,pose_gate_body):
-        drone_pose=[self.state[0], self.state[1], -self.state[2], 0, 0, self.state[8]]
-        pose_gate_body = pose_gate_body.numpy().reshape(-1,1)
-        waypoint_world = spherical_to_cartesian(drone_pose, pose_gate_body)
-        yaw_diff = pose_gate_body[3][0]
-        posf = [waypoint_world[0], waypoint_world[1], -waypoint_world[2]]
-        yawf = drone_pose[5]+yaw_diff+np.pi/2
-
-        return posf,yawf
-
-    def update_target(self):
-        image_response = self.client2.simGetImages([airsim.ImageRequest('0', airsim.ImageType.Scene, False, False)])[0]
- 
-        pose_gate_body=self.run_dronet(image_response)
-        self.posf,self.yawf=self.dronet_to_body(pose_gate_body) 
-
-    def update_target_loop(self):
-        while(True):
-            with torch.no_grad():
-                self.update_target()
-                #self.run_traj_planner()
-
-    def run_traj_planner(self):
-        posf=self.posf
-        yawf=self.yawf
-
-
-        pos0 = [self.state[0], self.state[1], self.state[2]]
-        vel0 = [self.state[3], self.state[4], self.state[5]]
-        ang_vel0 = [self.state[9], self.state[10], self.state[11]]
-        yaw0 = self.state[8] 
-
-        vel_des=min((self.index+1)*2,self.v_avg)
-
-        velf=[vel_des*np.cos(yawf),vel_des*np.sin(yawf),0,0]
-
-        x_initial=[pos0[0],pos0[1],pos0[2],yaw0]
-        x_final=[posf[0],posf[1],posf[2],yawf]
-        vel_initial=[vel0[0]*np.cos(yaw0)-vel0[1]*np.sin(yaw0),vel0[1]*np.cos(yaw0)+vel0[0]*np.sin(yaw0),vel0[2],ang_vel0[2]]
-        vel_final=velf
-
-        pose_err=0
-        for j in range(3):
-            pose_err+=pow(x_final[j]-pos0[j],2)
-
-        pose_err=np.sqrt(pose_err)
-        T=pose_err/(vel_des)
-        N=int(T/self.dtau)
-        t=np.linspace(0,T,N)
-        #print(len(t))
-        self.traj.find_traj(x_initial=x_initial,x_final=x_final,v_initial=vel_initial,v_final=vel_final,T=T) 
 
 
 
     def fly_through_gates(self):
-        quad_pose = [self.state[0], self.state[1], -self.state[2], 0, 0, self.state[8]]
+        quad_pose = [self.state[0], self.state[1], self.state[2], 0, 0, self.state[8]]
         self.client.simSetVehiclePose(QuadPose(quad_pose), True)
         self.quad.reset(x=self.state)
         
 
         index = 0
         vel_des=0
-
-        t=threading.Thread(target=self.update_target_loop)
-        t.start()
-
         while(True):
-            with torch.no_grad():
-                #self.update_target()
-                self.run_traj_planner()
 
-                """posf=self.posf
-                yawf=self.yawf
+            
+            for i in range (1):
+                waypoint_world = np.array([self.track[index%self.gateNumber].position.x_val, self.track[index%self.gateNumber].position.y_val, self.track[index%self.gateNumber].position.z_val])
+                
+                posf=waypoint_world
+                yawf=self.yaw_track[index%self.gateNumber]-np.pi/2#-(int(index/self.gateNumber))*2*np.pi
 
 
                 pos0 = [self.state[0], self.state[1], self.state[2]]
                 vel0 = [self.state[3], self.state[4], self.state[5]]
                 ang_vel0 = [self.state[9], self.state[10], self.state[11]]
                 yaw0 = self.state[8]
+
+                current_vel=np.sqrt(pow(vel0[0],2)+pow(vel0[1],2)+pow(vel0[2],2))
+
+                #print("Current_vel:{}".format(current_vel))
                 
-                vel_des=min((self.index+1)*2,self.v_avg)
+                vel_des=min((index+1)*2,self.v_avg)
 
                 velf=[vel_des*np.cos(yawf),vel_des*np.sin(yawf),0,0]
+
+                #print("Vel_des:{}".format(vel_des))
 
                 x_initial=[pos0[0],pos0[1],pos0[2],yaw0]
                 x_final=[posf[0],posf[1],posf[2],yawf]
@@ -444,7 +369,7 @@ class PoseSampler:
                 N=int(T/self.dtau)
                 t=np.linspace(0,T,N)
                 #print(len(t))
-                self.traj.find_traj(x_initial=x_initial,x_final=x_final,v_initial=vel_initial,v_final=vel_final,T=T)"""
+                self.traj.find_traj(x_initial=x_initial,x_final=x_final,v_initial=vel_initial,v_final=vel_final,T=T)
 
 
 
@@ -453,16 +378,18 @@ class PoseSampler:
 
                 target=self.traj.get_target(self.dtau*n)
                     
-                vel_target=self.traj.get_vel(self.dtau*n) 
-                yaw0=self.state[8]               
+                vel_target=self.traj.get_vel(self.dtau*n)                
 
                 for k in range(n):
                     t_current=t_current+self.dtau 
+                
+
                     
                     yaw_target=yaw0+(k+1)*(target[3]-self.state[8])/n
 
+
                     x_t=[vel_target[0]*np.cos(yaw_target)+vel_target[1]*np.sin(yaw_target),vel_target[1]*np.cos(yaw_target)-vel_target[0]*np.sin(yaw_target),vel_target[2],yaw_target]
-                    
+                    #print("vel target:{}".format(x_t))
                     u_nn=self.controller.run_controller(x=self.state[3:12],x_t=x_t)
                     self.state=self.quad.run_model(self.conf_u(u_nn))
 
@@ -473,19 +400,20 @@ class PoseSampler:
 
 
 
-                    quad_pose = [self.state[0], self.state[1], -self.state[2], 0, 0, self.state[8]]
+                    quad_pose = [self.state[0], self.state[1], self.state[2], 0, 0, self.state[8]]
 
                     self.total_cost+=abs(np.sqrt(pow(quad_pose[0],2)+pow(quad_pose[1],2))-10)
                     self.client.simSetVehiclePose(QuadPose(quad_pose), True)
-                    time.sleep(.01)
+                    time.sleep(.05)
 
-                    check_arrival = self.check_completion(self.index%self.gateNumber, quad_pose)
+                    check_arrival = self.check_completion(index, quad_pose)
 
                     if check_arrival: # drone arrives to the gate
                         gate_completed = True
-                        self.index += 1
-                        print("Drone has gone through the {0}. gate.".format(self.index))
-                        break        
+                        index += 1
+                        print("Drone has gone through the {0}. gate.".format(index))
+                        break
+                                
 
 
 
