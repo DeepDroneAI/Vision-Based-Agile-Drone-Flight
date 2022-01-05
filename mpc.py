@@ -38,7 +38,7 @@ def template_mpc(model):
     mpc = do_mpc.controller.MPC(model)
 
     setup_mpc = {
-        'n_horizon': 20,
+        'n_horizon': 50,
         'n_robust': 0,
         'open_loop': 0,
         't_step': 0.01,
@@ -57,13 +57,12 @@ def template_mpc(model):
     lterm = model.aux['cost']
 
     mpc.set_objective(mterm=mterm, lterm=lterm)
-    mpc.set_rterm(inp=np.array([[0.5], [0.5], [0.5],[1.5]]))
+    mpc.set_rterm(inp=np.array([[.0], [.0], [.0],[.0]]))
 
     max_att = np.array([[np.pi/3], [np.pi/3], [np.pi]])
-    min_att = np.array([[np.pi/3], [np.pi/3], [0*np.pi]])
     max_rate = np.array([[np.pi], [np.pi], [np.pi]])
-    max_u = np.array([[0.5], [0.5], [0.5],[2*0.5*9.81]])
-    min_u = np.array([[0.5], [0.5], [0.5],[0.0]])
+    max_u = np.array([[1], [1], [1],[10.0]])
+    min_u = np.array([[1], [1], [1],[0.0]])
     max_vel=np.array([[15], [15], [15]])
 
     mpc.bounds['lower','_x','Velocity'] = -max_vel
