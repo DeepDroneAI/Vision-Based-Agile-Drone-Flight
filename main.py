@@ -1,4 +1,4 @@
-from pose_sampler_loop import *
+from pose_sampler_rl_train import *
 import time
 import argparse
 parser = argparse.ArgumentParser(description='CHP')

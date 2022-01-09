@@ -28,6 +28,8 @@ import Dronet
 import lstmf
 import threading
 
+from DQN_solver import *
+
 
 class PoseSampler:
     def __init__(self,v_avg=5, with_gate=True):
@@ -73,10 +75,26 @@ class PoseSampler:
         #print("Dronet Model:", self.Dronet)
         self.covNet.load_state_dict(torch.load(self.base_path+'/weights/covNet.pth',map_location=torch.device('cpu')))   
         self.covNet.eval() 
+        self.covariance=0
+
+        self.n_states=14
+        self.n_actions=10
+
+        self.dqn_agent=DQNAgent(state_space=self.n_states,action_space=self.n_actions,max_memory_size=100000,batch_size=126,gamma=.99,lr=.001,exploration_max=1,exploration_min=.01,exploration_decay=.98)
+        self.rl_states=np.zeros(self.n_states)
+        self.rl_next_states=np.zeros(self.n_states)
+        self.rl_reward=0
+        self.rl_action=0
+        self.done=False
+
+
+        self.episode_number=3
 
         self.loop_ration=5 
         self.vel_des=0
 
+        self.crash=False
+        self.current_velocity=0
 
 
         self.quad=Model()
@@ -126,11 +144,13 @@ class PoseSampler:
         self.index=0
         self.yaw0 = self.state[8]
 
+        self.line_list=[]
+
         self.track = self.track # for circle trajectory change this with circle_track
         self.drone_init = self.drone_init # for circle trajectory change this with drone_init_circle
         self.state=np.array([self.drone_init.position.x_val,self.drone_init.position.y_val,-self.drone_init.position.z_val,0,0,self.yaw_track[0]-np.pi/2,0,0,0,0,0,0])
+        self.find_gate_edges()
         #-----------------------------------------------------------------------             
-
 
     def find_gate_distances(self):
         gate_1 = self.track[0]
@@ -217,7 +237,7 @@ class PoseSampler:
         distance_list = []
         for i in range(len(self.track)):
             gate = self.track[i]
-            distance = np.linalg.norm([self.quad.state[0] - gate.position.x_val, self.quad.state[1] - gate.position.y_val, self.quad.state[2] - gate.position.z_val])
+            distance = np.linalg.norm([self.state[0] - gate.position.x_val, self.state[1] - gate.position.y_val, -self.state[2] - gate.position.z_val])
             distance_list.append(distance)        
 
         distance_min = np.min(distance_list) # this is the distance of drone's center point to the closest gate 
@@ -227,8 +247,8 @@ class PoseSampler:
             drone_x_range = [.1, -.1]
             drone_y_range = [.1, -.1]
             drone_z_range = [.025, -.025]
-            rot_matrix = R.from_euler('ZYX',[self.quad.state[5], self.quad.state[4], self.quad.state[3]],degrees=False).as_dcm().reshape(3,3)
-            drone_pos = np.array([self.quad.state[0], self.quad.state[1], self.quad.state[2]])
+            rot_matrix = R.from_euler('ZYX',[self.state[8], self.state[7], self.state[6]],degrees=False).as_dcm().reshape(3,3)
+            drone_pos = np.array([self.state[0], self.state[1], -self.state[2]])
             edge_ind = 0
 
             #Collision check for drone's centroid
@@ -351,8 +371,6 @@ class PoseSampler:
         img =  Image.fromarray(img_rgb)
         image = self.transformation(img)  
         pose_gate_body = self.Dronet(image)
-        covariance=self.covNet(image)
-        print(covariance)
 
         return pose_gate_body 
 
@@ -388,7 +406,7 @@ class PoseSampler:
         ang_vel0 = [self.state[9], self.state[10], self.state[11]]
         yaw0 = self.state[8] 
 
-        vel_des=min((self.index+1)*2,self.v_avg)
+        vel_des=min((self.index+1)*2,self.v_avg+1)
 
         velf=[vel_des*np.cos(yawf),vel_des*np.sin(yawf),0,0]
 
@@ -408,94 +426,127 @@ class PoseSampler:
         #print(len(t))
         self.traj.find_traj(x_initial=x_initial,x_final=x_final,v_initial=vel_initial,v_final=vel_final,T=T) 
 
+    def get_rl_state(self):
+        states=np.zeros(14)
+        for i in range(9):
+            states[i]=self.state[i]
+        for i in range(3):
+            states[9+i]=self.posf[i]
+        states[12]=self.yawf
+        states[13]=self.covariance
+
+        return states
+    
+    def get_rl_reward(self):
+        reward=0
+        if self.crash:
+            reward-=1000000
+        reward+=self.current_velocity
+        if self.index==18:
+            reward+=1000
+
+        return reward
+
+    def reset_drone(self):
+        self.state=np.array([self.drone_init.position.x_val,self.drone_init.position.y_val,-self.drone_init.position.z_val,0,0,self.yaw_track[0]-np.pi/2,0,0,0,0,0,0])
+
+    def get_current_velocity(self):
+        self.current_velocity=np.sqrt(pow(self.state[3],2)+pow(self.state[4],2)+pow(self.state[5],2))
+
+    def get_distance_to_center_check(self):
+        distance=np.sqrt(pow(self.state[0],2)+pow(self.state[1],2)+pow(self.state[2]-2,2))
+
+        if distance>self.radius+3 or distance<self.radius-3:
+            return True
+        return False
+
+    def get_done_statu(self):
+        if self.get_distance_to_center_check() or self.crash or self.index==18:
+            return True
+        return False
+
 
 
     def fly_through_gates(self):
-        quad_pose = [self.state[0], self.state[1], -self.state[2], 0, 0, self.state[8]]
-        self.client.simSetVehiclePose(QuadPose(quad_pose), True)
-        self.quad.reset(x=self.state)
-        
+        mean_reward=[]
+        for epp in range(self.episode_number):
+            self.reset_drone()
+            print("Episode {} running...".format(epp))
+            quad_pose = [self.state[0], self.state[1], -self.state[2], 0, 0, self.state[8]]
+            self.client.simSetVehiclePose(QuadPose(quad_pose), True)
+            self.quad.reset(x=self.state)
+            reward_arr=[]
+            self.crash=False
+            self.index=0
+            rl_index=0
+            while(True):
+                with torch.no_grad():
 
-        index = 0
-        vel_des=0
+                    self.update_target()
+                    self.get_current_velocity()
+                    if rl_index!=0:
+                        self.rl_next_states=torch.Tensor(np.array(self.get_rl_state()))
+                        self.rl_reward=torch.Tensor([self.get_rl_reward()]).unsqueeze(0)
+                        self.done=torch.Tensor([int(self.get_done_statu())]).unsqueeze(0)
+                        self.dqn_agent.remember(state=self.rl_states,action=self.rl_action,reward=self.rl_reward,state2=self.rl_next_states,done=self.done)
+                        self.dqn_agent.experience_replay()
+                        reward_arr.append(self.get_rl_reward())
 
-        t=threading.Thread(target=self.update_target_loop)
-        t.start()
+                    if self.get_done_statu():
+                        break
 
-        while(True):
-            with torch.no_grad():
-                #self.update_target()
-                self.run_traj_planner()
-
-                """posf=self.posf
-                yawf=self.yawf
-
-
-                pos0 = [self.state[0], self.state[1], self.state[2]]
-                vel0 = [self.state[3], self.state[4], self.state[5]]
-                ang_vel0 = [self.state[9], self.state[10], self.state[11]]
-                yaw0 = self.state[8]
-                
-                vel_des=min((self.index+1)*2,self.v_avg)
-
-                velf=[vel_des*np.cos(yawf),vel_des*np.sin(yawf),0,0]
-
-                x_initial=[pos0[0],pos0[1],pos0[2],yaw0]
-                x_final=[posf[0],posf[1],posf[2],yawf]
-                vel_initial=[vel0[0]*np.cos(yaw0)-vel0[1]*np.sin(yaw0),vel0[1]*np.cos(yaw0)+vel0[0]*np.sin(yaw0),vel0[2],ang_vel0[2]]
-                vel_final=velf
-
-                pose_err=0
-                for j in range(3):
-                    pose_err+=pow(x_final[j]-pos0[j],2)
-
-                pose_err=np.sqrt(pose_err)
-                T=pose_err/(vel_des)
-                N=int(T/self.dtau)
-                t=np.linspace(0,T,N)
-                #print(len(t))
-                self.traj.find_traj(x_initial=x_initial,x_final=x_final,v_initial=vel_initial,v_final=vel_final,T=T)"""
-
-
-
-                t_current=0.0
-                n=10
-
-                target=self.traj.get_target(self.dtau*n)
                     
-                vel_target=self.traj.get_vel(self.dtau*n) 
-                yaw0=self.state[8]               
+                    self.rl_states=torch.Tensor(np.array(self.get_rl_state()))
+                    self.rl_action=self.dqn_agent.act(self.rl_states)
+                    rl_index+=1
 
-                for k in range(n):
-                    t_current=t_current+self.dtau 
+                    self.v_avg=self.rl_action.item()
+
                     
-                    yaw_target=yaw0+(k+1)*(target[3]-self.state[8])/n
+                    self.run_traj_planner()
 
-                    x_t=[vel_target[0]*np.cos(yaw_target)+vel_target[1]*np.sin(yaw_target),vel_target[1]*np.cos(yaw_target)-vel_target[0]*np.sin(yaw_target),vel_target[2],yaw_target]
-                    
-                    u_nn=self.controller.run_controller(x=self.state[3:12],x_t=x_t)
-                    self.state=self.quad.run_model(self.conf_u(u_nn))
+                    t_current=0.0
+                    n=10
+
+                    target=self.traj.get_target(self.dtau*n)
+                        
+                    vel_target=self.traj.get_vel(self.dtau*n) 
+                    yaw0=self.state[8]               
+
+                    for k in range(n):
+                        t_current=t_current+self.dtau 
+                        
+                        yaw_target=yaw0+(k+1)*(target[3]-self.state[8])/n
+
+                        x_t=[vel_target[0]*np.cos(yaw_target)+vel_target[1]*np.sin(yaw_target),vel_target[1]*np.cos(yaw_target)-vel_target[0]*np.sin(yaw_target),vel_target[2],yaw_target]
+                        
+                        u_nn=self.controller.run_controller(x=self.state[3:12],x_t=x_t)
+                        self.state=self.quad.run_model(self.conf_u(u_nn))
 
 
+                        quad_pose = [self.state[0], self.state[1], -self.state[2], 0, 0, self.state[8]]
 
-                    vel_total=np.sqrt(pow(self.state[3],2)+pow(self.state[4],2)+pow(self.state[5],2))
-                    #print("Total_vel:{}".format(vel_total))
+                        self.total_cost+=abs(np.sqrt(pow(quad_pose[0],2)+pow(quad_pose[1],2))-10)
+                        self.client.simSetVehiclePose(QuadPose(quad_pose), True)
+                        #time.sleep(.001)
 
+                        check_arrival = self.check_completion(self.index%self.gateNumber, quad_pose)
 
+                        self.crash=self.check_collision()
 
-                    quad_pose = [self.state[0], self.state[1], -self.state[2], 0, 0, self.state[8]]
+                        if self.crash:
+                            print("Drone crashed")
+                            break
 
-                    self.total_cost+=abs(np.sqrt(pow(quad_pose[0],2)+pow(quad_pose[1],2))-10)
-                    self.client.simSetVehiclePose(QuadPose(quad_pose), True)
-                    time.sleep(.01)
-
-                    check_arrival = self.check_completion(self.index%self.gateNumber, quad_pose)
-
-                    if check_arrival: # drone arrives to the gate
-                        gate_completed = True
-                        self.index += 1
-                        print("Drone has gone through the {0}. gate.".format(self.index))
-                        break        
+                        if check_arrival: # drone arrives to the gate
+                            gate_completed = True
+                            self.index += 1
+                            print("Drone has gone through the {0}. gate.".format(self.index))
+                            break
+            mean_reward.append(np.mean(np.array(reward_arr)))
+            self.dqn_agent.save_model(name="model-{}".format(epp))
+        np.savetxt("Rewards.txt",np.array(mean_reward))
+                            
 
 
 

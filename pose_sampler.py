@@ -69,8 +69,6 @@ class PoseSampler:
         self.lstmR.load_state_dict(torch.load(self.base_path+'/weights/R_2.pth',map_location=torch.device('cpu')))   
         self.lstmR.eval() 
 
-
-
         self.quad=Model()
         self.controller=Controller()
 
