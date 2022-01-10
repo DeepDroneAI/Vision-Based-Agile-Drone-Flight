@@ -80,7 +80,8 @@ class PoseSampler:
         self.n_states=14
         self.n_actions=5
 
-        self.dqn_agent=DQNAgent(state_space=self.n_states,action_space=self.n_actions,max_memory_size=100000,batch_size=256,gamma=.99,lr=.003,exploration_max=1,exploration_min=.1,exploration_decay=.95)
+        self.dqn_agent=DQNAgent(state_space=self.n_states,action_space=self.n_actions,max_memory_size=100000,batch_size=256,gamma=.99,lr=.003,exploration_max=0,exploration_min=0,exploration_decay=0)
+        self.dqn_agent.load_model("model-100")
         self.rl_states=np.zeros(self.n_states)
         self.rl_next_states=np.zeros(self.n_states)
         self.rl_reward=0
@@ -468,14 +469,12 @@ class PoseSampler:
 
 
     def fly_through_gates(self):
-        mean_reward=[]
         for epp in range(self.episode_number):
             self.reset_drone()
             print("Episode {} running...".format(epp))
             quad_pose = [self.state[0], self.state[1], -self.state[2], 0, 0, self.state[8]]
             self.client.simSetVehiclePose(QuadPose(quad_pose), True)
             self.quad.reset(x=self.state)
-            reward_arr=[]
             self.crash=False
             self.index=0
             rl_index=0
@@ -484,13 +483,6 @@ class PoseSampler:
 
                     self.update_target()
                     self.get_current_velocity()
-                    if rl_index!=0:
-                        self.rl_next_states=torch.Tensor(np.array(self.get_rl_state()))
-                        self.rl_reward=torch.Tensor([self.get_rl_reward()]).unsqueeze(0)
-                        self.done=torch.Tensor([int(self.get_done_statu())]).unsqueeze(0)
-                        self.dqn_agent.remember(state=self.rl_states,action=self.rl_action,reward=self.rl_reward,state2=self.rl_next_states,done=self.done)
-                        self.dqn_agent.experience_replay()
-                        reward_arr.append(self.get_rl_reward())
 
                     if self.get_done_statu():
                         break
@@ -501,6 +493,7 @@ class PoseSampler:
                     rl_index+=1
 
                     self.v_avg=self.rl_action.item()
+                    print("Des_Vel={}".format(self.v_avg+1))
 
                     
                     self.run_traj_planner()
@@ -543,10 +536,6 @@ class PoseSampler:
                             self.index += 1
                             print("Drone has gone through the {0}. gate.".format(self.index))
                             break
-            mean_reward.append(np.mean(np.array(reward_arr)))
-            if epp%500==0 and epp!=0:
-                self.dqn_agent.save_model(name="model-{}".format(epp))
-        np.savetxt("Rewards.txt",np.array(mean_reward))
                             
 
 
