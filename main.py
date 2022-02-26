@@ -1,4 +1,4 @@
-from pose_sampler_rl_train import *
+from covnet_test import *
 import time
 import argparse
 parser = argparse.ArgumentParser(description='CHP')
