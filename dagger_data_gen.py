@@ -4,18 +4,16 @@ from quad_model import Model
 import matplotlib.pyplot as plt
 from mpc_class import MPC_controller
 import argparse
+import _pickle as cPickle
 
 parser = argparse.ArgumentParser(description='MPC')
 parser.add_argument('--ref', default="12.0,1.0,1.0,0.5" , type=str,
                     help='target vel')
 parser.add_argument('--idx', default=0 , type=int,
                     help='index')
-parser.add_argument('--episode', default=500 , type=int,
-                    help='episode')
 args = parser.parse_args()
 
 file_idx=args.idx
-episode=args.episode
 ref_vel_arr=args.ref.split(",")
 ref_vel=[]
 
@@ -70,7 +68,6 @@ Data_arr=[]
 for i in range(N):
     xt=[xd[i],yd[i],zd[i],psid[i]]
     x0=x0[3:12]
-    #x02=x02[3:12]
     u_nn=controller.run_controller(x=x0,x_t=xt)
     u_mpc=mpc_controller.run_controller(x=x0,x_t=xt)
     u_list_mpc[i,:]=u_mpc
@@ -83,68 +80,17 @@ for i in range(N):
         Data_arr.append(to_dataset(x=controller.x_nn,u=u_mpc))       
         mse_arr[i]=err
         x0=quad.run_model(conf_u(u_mpc))
-        #x02=quad2.run_model(conf_u(u_mpc))
         index+=1
     else:
         x0=quad.run_model(conf_u(u_nn))
-        #x02=quad2.run_model(conf_u(u_mpc))
         mse_arr[i]=0
     state_arr[i,:]=x0[3:12]
-    #state_arr_mpc[i,:]=x02[3:12]
     
 
-np.savetxt("Dataset/data_{}.txt".format(file_idx),np.array(Data_arr))
-#print("index={}".format(index))
-"""
-fig, axs = plt.subplots(3, 2)
-axs[0,0].plot(t,u_list_nn[:,0])
-axs[0,0].plot(t,u_list_mpc[:,0])
-axs[0,0].legend(["u_nn"," u_mpc"])
-axs[0,0].set_title("U1")
 
-axs[0,1].plot(t,u_list_nn[:,1])
-axs[0,1].plot(t,u_list_mpc[:,1])
-axs[0,1].legend(["u_nn"," u_mpc"])
-axs[0,1].set_title("U2")
-
-axs[1,0].plot(t,u_list_nn[:,2])
-axs[1,0].plot(t,u_list_mpc[:,2])
-axs[1,0].legend(["u_nn"," u_mpc"])
-axs[1,0].set_title("U3")
-
-axs[1,1].plot(t,u_list_nn[:,3])
-axs[1,1].plot(t,u_list_mpc[:,3])
-axs[1,1].legend(["u_nn"," u_mpc"])
-axs[1,1].set_title("U4")
-
-axs[2,1].plot(t,mse_arr)
-axs[2,1].legend(["mse"])
-axs[2,1].set_title("mean square error")
-plt.show()
-
-fig, axs = plt.subplots(2, 2)
-axs[0,0].plot(t,xd)
-axs[0,0].plot(t,state_arr[:,0])
-axs[0,0].plot(t,state_arr_mpc[:,0])
-axs[0,0].legend(["x_t"," x_nn","x_mpc"])
-
-axs[0,1].plot(t,yd)
-axs[0,1].plot(t,state_arr[:,1])
-axs[0,1].plot(t,state_arr_mpc[:,1])
-axs[0,1].legend(["y_t"," y_nn","y_mpc"])
-
-axs[1,0].plot(t,zd)
-axs[1,0].plot(t,state_arr[:,2])
-axs[1,0].plot(t,state_arr_mpc[:,2])
-axs[1,0].legend(["z_t"," y_nn","xy_mpc"])
-
-axs[1,1].plot(t,psid)
-axs[1,1].plot(t,state_arr[:,5])
-axs[1,1].plot(t,state_arr_mpc[:,5])
-axs[1,1].legend(["psi_t"," psi_nn","psi_mpc"])
+f = open('Dataset/Data1/D1_data.pkl', 'wb')
 
 
-plt.show()
-"""
+pickler = cPickle.Pickler(f)
 
-
+pickler.dump(np.array(Data_arr))

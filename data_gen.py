@@ -4,6 +4,7 @@ from quad_model import Model
 import matplotlib.pyplot as plt
 from mpc_class import MPC_controller
 import argparse
+import _pickle as cPickle
 
 parser = argparse.ArgumentParser(description='MPC')
 parser.add_argument('--ref', default="12.0,1.0,1.0,0.5" , type=str,
@@ -86,7 +87,12 @@ for i in range(N):
 
     
 
-np.savetxt("Dataset/data_{}.txt".format(file_idx),np.array(Data_arr))
+f = open('Dataset/Data1/D0_data.pkl', 'wb')
+
+
+pickler = cPickle.Pickler(f)
+
+pickler.dump(np.array(Data_arr))
 
 
 
