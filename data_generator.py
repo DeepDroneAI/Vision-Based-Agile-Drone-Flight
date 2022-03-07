@@ -4,15 +4,14 @@ import os
 import multiprocessing as mp
 import time
 
-epoch=99
+epoch=1
 velx_lim=[-15,15]
 vely_lim=[-3,3]
 velz_lim=[-2,2]
 errpsi_lim=[-np.pi,np.pi]
 
 index=1
-
-episode=1000
+n_pros=2
 
 def calculate_random():
     x=random.uniform(velx_lim[0],velx_lim[1])
@@ -26,7 +25,7 @@ def arr_to_str(arr):
     return s_cmd
 
 def run_code(index):
-    command="python dagger_data_gen.py --ref={} --idx {} --episode {}".format(arr_to_str(calculate_random()),index,episode)
+    command="python data_gen.py --ref={} --idx {}".format(arr_to_str(calculate_random()),index)
     os.system(command)
 
 
@@ -34,7 +33,7 @@ if __name__=="__main__":
     ti=time.time()
     for i in range(epoch):
         proceses=[]
-        for j in range(4):
+        for j in range(n_pros):
             proc=mp.Process(target=run_code,args=(index,))
             proceses.append(proc)
             proc.start()

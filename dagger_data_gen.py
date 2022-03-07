@@ -93,7 +93,7 @@ for i in range(N):
     #state_arr_mpc[i,:]=x02[3:12]
     
 
-np.savetxt("Datas_Dagger_1/data_{}.txt".format(file_idx),np.array(Data_arr))
+np.savetxt("Dataset/data_{}.txt".format(file_idx),np.array(Data_arr))
 #print("index={}".format(index))
 """
 fig, axs = plt.subplots(3, 2)
