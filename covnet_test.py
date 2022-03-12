@@ -10,7 +10,6 @@ from airsimdroneracingvae.types import Pose, Vector3r, Quaternionr
 from scipy.spatial.transform import Rotation
 import time
 
-
 #Extras for Trajectory and Control
 from quadrotor import *
 from geom_utils import QuadPose
@@ -28,6 +27,8 @@ from createTraj import *
 import Dronet
 import lstmf
 import threading
+import matplotlib.pyplot as plt 
+from matplotlib.animation import FuncAnimation
 
 class PoseSampler:
     def __init__(self,v_avg=5, with_gate=True):
@@ -47,7 +48,7 @@ class PoseSampler:
         self.client2 = airsim.MultirotorClient()
         self.client2.confirmConnection()
 
-        self.iteration = 21242
+        self.iteration = 0
         # Dronet
         self.device = torch.device("cpu")
         self.Dronet =  Dronet.ResNet(Dronet.BasicBlock, [1,1,1,1], num_classes = 4)
@@ -96,9 +97,13 @@ class PoseSampler:
         self.saveChanged = True        
         
         quat0 = R.from_euler('ZYX',[90.,0.,0.],degrees=True).as_quat()
+        quat1 = R.from_euler('ZYX',[80.,0.,0.],degrees=True).as_quat()
+        quat2 = R.from_euler('ZYX',[70.,0.,0.],degrees=True).as_quat()
         self.yaw_track=np.array([90])*np.pi/180
 
-        self.track = [Pose(Vector3r(0.,2*10.,-2.) , Quaternionr(quat0[0],quat0[1],quat0[2],quat0[3]))]
+        self.track = [Pose(Vector3r(0.,2*10.,-2.) , Quaternionr(quat0[0],quat0[1],quat0[2],quat0[3])),
+                      Pose(Vector3r(10.,20.5,-2.) , Quaternionr(quat1[0],quat1[1],quat1[2],quat1[3])),
+                      Pose(Vector3r(20.,19.5,-2.) , Quaternionr(quat2[0],quat2[1],quat2[2],quat2[3]))]
             
         quat_drone = R.from_euler('ZYX',[90.,0.,0.],degrees=True).as_quat()
         self.drone_init = Pose(Vector3r(-10.,2*10.,-2), Quaternionr(quat_drone[0],quat_drone[1],quat_drone[2],quat_drone[3]))
@@ -112,7 +117,7 @@ class PoseSampler:
     
         #-----------------------------------------------------------------------        
 
-    def check_completion(self, index, quad_pose,gate_x, eps=1):
+    def check_completion(self, index, quad_pose,waypoint_world, eps=1):
         x, y, z = quad_pose[0], quad_pose[1], quad_pose[2]
 
         """ xd = self.track[index].position.x_val
@@ -124,7 +129,7 @@ class PoseSampler:
         #target = [xd, yd, zd, psid] 
         check_arrival = False
 
-        diff = quad_pose[0] - gate_x
+        diff = quad_pose[0] - waypoint_world[0]
 
         if (-eps <= diff <= eps):
             #self.quad.calculate_cost(target=target, final_calculation=True)
@@ -151,7 +156,7 @@ class PoseSampler:
         #print("x,y,z error: ", x_error, y_error, z_error)
         #print("Pos Error: ", x_error + y_error + z_error)        
         #print("Yaw error: ", yaw_error)
-        print("########")
+        #print("########")
 
         return ((x_error + y_error + z_error)/100) + (yaw_error/(2*np.pi))
 
@@ -188,17 +193,23 @@ class PoseSampler:
         image_dronet, image_noisy = self.add_noise(img)  # Adds noise to the image with 1/3 probability
         
         pose_gate_body = self.Dronet(image_dronet)
-        covariance = self.covNet(image_dronet)
+        covariance = float(self.covNet(image_dronet))
 
         self.posf,self.yawf=self.dronet_to_body(pose_gate_body)
 
         real_error = self.calculate_covariance()
+
+        self.list_covnet.append(covariance)
+        self.list_difference.append(covariance-real_error)
+        self.list_realerror.append(real_error)
     
         print("Real Error: ", real_error)
-        print("Covnet Error: ", covariance)
-        print("Difference: ", covariance - real_error)
-        
+        print("Covnet Error: ",covariance)
+        print("Difference: ", covariance-real_error)
+        print("##########################")
+
         self.iteration = self.iteration + 1
+
 
     def dronet_to_body(self,pose_gate_body):
         drone_pose=[self.state[0], self.state[1], -self.state[2], 0, 0, self.state[8]]
@@ -227,10 +238,8 @@ class PoseSampler:
 
         return output
 
-
-
     def update_target_loop(self):
-
+        
         while(True):
             with torch.no_grad():
                 self.update_target()
@@ -266,7 +275,7 @@ class PoseSampler:
         #print(len(t))
         self.traj.find_traj(x_initial=x_initial,x_final=x_final,v_initial=vel_initial,v_final=vel_final,T=T) 
 
-
+        
 
     def fly_through_gates(self):
         quad_pose = [self.state[0], self.state[1], -self.state[2], 0, 0, self.state[8]]
@@ -277,11 +286,14 @@ class PoseSampler:
         index = 0
         vel_des=0
 
+        self.list_covnet = []
+        self.list_difference = []
+        self.list_realerror = []
+
         t=threading.Thread(target=self.update_target_loop)
         t.start()
 
-        waypoint_world = np.array([self.track[0].position.x_val, self.track[0].position.y_val, self.track[0].position.z_val])
-        self.waypoint_world_real = np.array([self.track[0].position.x_val, self.track[0].position.y_val, self.track[0].position.z_val])
+        
 
         while(True):
             with torch.no_grad():
@@ -293,7 +305,10 @@ class PoseSampler:
                 target=self.traj.get_target(self.dtau*n)
                     
                 vel_target=self.traj.get_vel(self.dtau*n) 
-                yaw0=self.state[8]               
+                yaw0=self.state[8]
+
+                waypoint_world = np.array([self.track[index].position.x_val, self.track[index].position.y_val, self.track[index].position.z_val])
+                self.waypoint_world_real = np.array([self.track[index].position.x_val, self.track[index].position.y_val, self.track[index].position.z_val])
 
                 for k in range(n):
                     t_current=t_current+self.dtau 
@@ -315,16 +330,33 @@ class PoseSampler:
                     time.sleep(.01)
 
 
-                    check_arrival = self.check_completion(0, quad_pose,waypoint_world[0])
+                    check_arrival = self.check_completion(index, quad_pose,waypoint_world)
 
                     if check_arrival: # drone arrives to the gate  
                         gate_completed = True
                         #self.v_avg = np.random.uniform(5,10)
-                        self.state = np.array([self.drone_init.position.x_val,self.drone_init.position.y_val, -self.drone_init.position.z_val,0,0,self.yaw_track[0]-np.pi/2,0,0,0,0,0,0])
-                        quad_pose = [self.state[0], self.state[1], -self.state[2], 0, 0, self.state[8]]
-                        self.client.simSetVehiclePose(QuadPose(quad_pose), True)
-                        time.sleep(.01)
-                        self.quad.reset(x=self.state)
+                        #self.state = np.array([self.drone_init.position.x_val,self.drone_init.position.y_val, -self.drone_init.position.z_val,0,0,self.yaw_track[0]-np.pi/2,0,0,0,0,0,0])
+                        #quad_pose = [self.state[0], self.state[1], -self.state[2], 0, 0, self.state[8]]
+                        #self.client.simSetVehiclePose(QuadPose(quad_pose), True)
+                        #time.sleep(.01)
+                        #self.quad.reset(x=self.state)
+
+                        if index == 2:
+                            plt.figure()
+                            plt.plot(self.list_covnet, label = "CovNet")
+                            plt.plot(self.list_realerror, label = "Real Error")
+                            #plt.plot(self.list_difference, label = "Error Difference")
+                            plt.legend(['CovNet', 'Real Error'])
+
+                            plt.xlabel('Iteration')
+                            plt.ylabel('Covariance')
+                            plt.grid('on')
+                            plt.title('Iteration vs Covariance Graph')
+                            
+                            plt.savefig("covariance.png")
+
+                            plt.show()
+
                         index += 1
                         print("Drone has gone through the {0}. gate.".format(index))
                         break
